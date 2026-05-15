@@ -57,30 +57,31 @@ class FlutterHmac extends Hmac with PlatformCryptographicAlgorithm {
   }) async {
     final hashName = _hashNameFor(hashAlgorithm);
     if (hashName != null) {
-      final result = await invokeMethod(
-        'hmac',
-        {
-          'data': asUint8List(bytes),
-          'hash': hashName,
-          'key': asUint8List(await secretKey.extractBytes()),
-        },
-      );
-      final macBytes = asUint8List(result['mac'] as List<int>);
-      return Mac(macBytes);
-    }
-    return await BrowserCryptography.defaultInstance
-        .hmac(hashAlgorithm)
-        .calculateMac(
-          bytes,
-          secretKey: secretKey,
-          nonce: nonce,
-          aad: aad,
+      try {
+        final result = await invokeMethod(
+          'hmac',
+          {
+            'data': asUint8List(bytes),
+            'hash': hashName,
+            'key': asUint8List(await secretKey.extractBytes()),
+          },
         );
+        final macBytes = asUint8List(result['mac'] as List<int>);
+        return Mac(macBytes);
+      } on UnsupportedError {
+        // Fall through to fallback
+      }
+    }
+    return await fallback.calculateMac(
+      bytes,
+      secretKey: secretKey,
+      nonce: nonce,
+      aad: aad,
+    );
   }
 
   static String? _hashNameFor(HashAlgorithm hashAlgorithm) {
-    // Currently only Android supports HMAC.
-    if (isAndroid) {
+    if (isAndroid || isCupertino) {
       if (hashAlgorithm is Sha1) {
         return 'SHA-1';
       }

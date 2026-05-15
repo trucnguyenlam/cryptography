@@ -39,15 +39,19 @@ class FlutterX25519 extends DelegatingKeyExchangeAlgorithm
   Future<SimpleKeyPair> newKeyPair() async {
     if (!kIsWeb) {
       if (isSupportedPlatform) {
-        final result = await invokeMethod('X25519.newKeyPair', {});
-        return SimpleKeyPairData(
-          result['privateKey'] as Uint8List,
-          publicKey: SimplePublicKey(
-            result['publicKey'] as Uint8List,
+        try {
+          final result = await invokeMethod('X25519.newKeyPair', {});
+          return SimpleKeyPairData(
+            result['privateKey'] as Uint8List,
+            publicKey: SimplePublicKey(
+              result['publicKey'] as Uint8List,
+              type: KeyPairType.x25519,
+            ),
             type: KeyPairType.x25519,
-          ),
-          type: KeyPairType.x25519,
-        );
+          );
+        } on UnsupportedError {
+          // Fall through to fallback
+        }
       }
     }
     return await fallback.newKeyPair();
@@ -68,15 +72,19 @@ class FlutterX25519 extends DelegatingKeyExchangeAlgorithm
       if (isSupportedPlatform &&
           keyPair is SimpleKeyPairData &&
           remotePublicKey is SimplePublicKey) {
-        final privateKey = await keyPair.extractPrivateKeyBytes();
-        final publicKey = remotePublicKey.bytes;
-        final result = await invokeMethod('X25519.sharedSecretKey', {
-          'privateKey': asUint8List(privateKey),
-          'publicKey': asUint8List(publicKey),
-        });
-        return SecretKey(
-          result['sharedSecretKey'] as Uint8List,
-        );
+        try {
+          final privateKey = await keyPair.extractPrivateKeyBytes();
+          final publicKey = remotePublicKey.bytes;
+          final result = await invokeMethod('X25519.sharedSecretKey', {
+            'privateKey': asUint8List(privateKey),
+            'publicKey': asUint8List(publicKey),
+          });
+          return SecretKey(
+            result['sharedSecretKey'] as Uint8List,
+          );
+        } on UnsupportedError {
+          // Fall through to fallback
+        }
       }
     }
     return await fallback.sharedSecretKey(

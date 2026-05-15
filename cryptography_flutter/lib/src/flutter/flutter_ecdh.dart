@@ -77,29 +77,33 @@ class FlutterEcdh extends Ecdh implements PlatformCryptographicAlgorithm {
   @override
   Future<EcKeyPair> newKeyPair() async {
     if (isSupportedPlatform) {
-      final result = await invokeMethod(
-        'Ecdh.newKeyPair',
-        {
-          if (isAndroid) 'androidProvider': androidCryptoProvider,
-          'curve': _curveName,
-        },
-      );
-      final der = result['der'] as Uint8List?;
-      if (der != null) {
-        return EcKeyPairData.parseDer(
-          der,
+      try {
+        final result = await invokeMethod(
+          'Ecdh.newKeyPair',
+          {
+            if (isAndroid) 'androidProvider': androidCryptoProvider,
+            'curve': _curveName,
+          },
+        );
+        final der = result['der'] as Uint8List?;
+        if (der != null) {
+          return EcKeyPairData.parseDer(
+            der,
+            type: keyPairType,
+          );
+        }
+        final d = result['d'] as Uint8List;
+        final x = result['x'] as Uint8List;
+        final y = result['y'] as Uint8List;
+        return EcKeyPairData(
+          d: d,
+          x: x,
+          y: y,
           type: keyPairType,
         );
+      } on UnsupportedError {
+        // Fall through to fallback
       }
-      final d = result['d'] as Uint8List;
-      final x = result['x'] as Uint8List;
-      final y = result['y'] as Uint8List;
-      return EcKeyPairData(
-        d: d,
-        x: x,
-        y: y,
-        type: keyPairType,
-      );
     }
     final fallback = this.fallback;
     if (fallback == null) {
@@ -111,30 +115,34 @@ class FlutterEcdh extends Ecdh implements PlatformCryptographicAlgorithm {
   @override
   Future<EcKeyPair> newKeyPairFromSeed(List<int> seed) async {
     if (isSupportedPlatform) {
-      final result = await invokeMethod(
-        'Ecdh.newKeyPair',
-        {
-          if (isAndroid) 'androidProvider': androidCryptoProvider,
-          'curve': _curveName,
-          'seed': asUint8List(seed),
-        },
-      );
-      final der = result['der'] as Uint8List?;
-      if (der != null) {
-        return EcKeyPairData.parseDer(
-          der,
+      try {
+        final result = await invokeMethod(
+          'Ecdh.newKeyPair',
+          {
+            if (isAndroid) 'androidProvider': androidCryptoProvider,
+            'curve': _curveName,
+            'seed': asUint8List(seed),
+          },
+        );
+        final der = result['der'] as Uint8List?;
+        if (der != null) {
+          return EcKeyPairData.parseDer(
+            der,
+            type: keyPairType,
+          );
+        }
+        final d = result['d'] as Uint8List;
+        final x = result['x'] as Uint8List;
+        final y = result['y'] as Uint8List;
+        return EcKeyPairData(
+          d: d,
+          x: x,
+          y: y,
           type: keyPairType,
         );
+      } on UnsupportedError {
+        // Fall through to fallback
       }
-      final d = result['d'] as Uint8List;
-      final x = result['x'] as Uint8List;
-      final y = result['y'] as Uint8List;
-      return EcKeyPairData(
-        d: d,
-        x: x,
-        y: y,
-        type: keyPairType,
-      );
     }
     final fallback = this.fallback;
     if (fallback == null) {
@@ -164,43 +172,47 @@ class FlutterEcdh extends Ecdh implements PlatformCryptographicAlgorithm {
           'Expected EcPublicKey',
         );
       }
-      Map result;
-      if (isCupertino) {
-        result = await invokeMethod(
-          'Ecdh.sharedSecretKey',
-          {
-            if (isAndroid) 'androidProvider': androidCryptoProvider,
-            'curve': _curveName,
-            'localDer': keyPairData.toDer(),
-            'remoteDer': remotePublicKey.toDer(),
-          },
-        );
-      } else {
-        result = await invokeMethod(
-          'Ecdh.sharedSecretKey',
-          {
-            if (isAndroid) 'androidProvider': androidCryptoProvider,
-            'curve': _curveName,
-            'localD': asUint8List(keyPairData.d),
-            'localX': asUint8List(keyPairData.x),
-            'localY': asUint8List(keyPairData.y),
-            'remoteX': asUint8List(remotePublicKey.x),
-            'remoteY': asUint8List(remotePublicKey.y),
-          },
-        );
-      }
-      final error = result['error'];
-      if (error != null) {
-        throw StateError(
-          '"package:cryptography_flutter": invalid output from plugin: $error',
-        );
-      }
-      var bytes = result['bytes'] as Uint8List;
-      if (bytes.length >= length) {
-        if (bytes.length > length) {
-          bytes = bytes.sublist(0, length);
+      try {
+        Map result;
+        if (isCupertino) {
+          result = await invokeMethod(
+            'Ecdh.sharedSecretKey',
+            {
+              if (isAndroid) 'androidProvider': androidCryptoProvider,
+              'curve': _curveName,
+              'localDer': keyPairData.toDer(),
+              'remoteDer': remotePublicKey.toDer(),
+            },
+          );
+        } else {
+          result = await invokeMethod(
+            'Ecdh.sharedSecretKey',
+            {
+              if (isAndroid) 'androidProvider': androidCryptoProvider,
+              'curve': _curveName,
+              'localD': asUint8List(keyPairData.d),
+              'localX': asUint8List(keyPairData.x),
+              'localY': asUint8List(keyPairData.y),
+              'remoteX': asUint8List(remotePublicKey.x),
+              'remoteY': asUint8List(remotePublicKey.y),
+            },
+          );
         }
-        return SecretKey(bytes);
+        final error = result['error'];
+        if (error != null) {
+          throw StateError(
+            '"package:cryptography_flutter": invalid output from plugin: $error',
+          );
+        }
+        var bytes = result['bytes'] as Uint8List;
+        if (bytes.length >= length) {
+          if (bytes.length > length) {
+            bytes = bytes.sublist(0, length);
+          }
+          return SecretKey(bytes);
+        }
+      } on UnsupportedError {
+        // Fall through to fallback
       }
     }
     final fallback = this.fallback;

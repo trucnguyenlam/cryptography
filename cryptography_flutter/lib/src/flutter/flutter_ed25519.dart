@@ -40,15 +40,19 @@ class FlutterEd25519 extends DelegatingEd25519
   Future<SimpleKeyPair> newKeyPair() async {
     if (!kIsWeb) {
       if (isSupportedPlatform) {
-        final result = await invokeMethod('Ed25519.newKeyPair', {});
-        return SimpleKeyPairData(
-          result['privateKey'] as Uint8List,
-          publicKey: SimplePublicKey(
-            result['publicKey'] as Uint8List,
+        try {
+          final result = await invokeMethod('Ed25519.newKeyPair', {});
+          return SimpleKeyPairData(
+            result['privateKey'] as Uint8List,
+            publicKey: SimplePublicKey(
+              result['publicKey'] as Uint8List,
+              type: KeyPairType.x25519,
+            ),
             type: KeyPairType.x25519,
-          ),
-          type: KeyPairType.x25519,
-        );
+          );
+        } on UnsupportedError {
+          // Fall through to fallback
+        }
       }
     }
     return fallback.newKeyPair();
@@ -67,28 +71,34 @@ class FlutterEd25519 extends DelegatingEd25519
     if (!kIsWeb) {
       if (keyPair is SimpleKeyPair) {
         if (isSupportedPlatform) {
-          final privateKeyBytes = await keyPair.extractPrivateKeyBytes();
-          final publicKey = await keyPair.extractPublicKey();
-          final publicKeyBytes = Uint8List.fromList(
-            publicKey.bytes,
-          );
-          final result = await invokeMethod(
-            'Ed25519.sign',
-            {
-              'data': asUint8List(message),
-              'privateKey': asUint8List(privateKeyBytes),
-              'publicKey': asUint8List(publicKeyBytes),
-            },
-          );
-          final error = result['error'];
-          if (error is String) {
-            throw StateError('error in "package:cryptography_flutter": $error');
+          try {
+            final privateKeyBytes = await keyPair.extractPrivateKeyBytes();
+            final publicKey = await keyPair.extractPublicKey();
+            final publicKeyBytes = Uint8List.fromList(
+              publicKey.bytes,
+            );
+            final result = await invokeMethod(
+              'Ed25519.sign',
+              {
+                'data': asUint8List(message),
+                'privateKey': asUint8List(privateKeyBytes),
+                'publicKey': asUint8List(publicKeyBytes),
+              },
+            );
+            final error = result['error'];
+            if (error is String) {
+              throw StateError(
+                'error in "package:cryptography_flutter": $error',
+              );
+            }
+            final bytes = result['signature'] as Uint8List;
+            return Signature(
+              bytes,
+              publicKey: publicKey,
+            );
+          } on UnsupportedError {
+            // Fall through to fallback
           }
-          final bytes = result['signature'] as Uint8List;
-          return Signature(
-            bytes,
-            publicKey: publicKey,
-          );
         }
       }
     }
@@ -102,20 +112,24 @@ class FlutterEd25519 extends DelegatingEd25519
   }) async {
     if (isSupportedPlatform) {
       final publicKey = signature.publicKey;
-      if (publicKey is SimplePublicKey && isSupportedPlatform) {
-        final result = await invokeMethod(
-          'Ed25519.verify',
-          {
-            'data': asUint8List(message),
-            'signature': asUint8List(signature.bytes),
-            'publicKey': asUint8List(publicKey.bytes),
-          },
-        );
-        final error = result['error'];
-        if (error is String) {
-          throw StateError('error in "package:cryptography_flutter": $error');
+      if (publicKey is SimplePublicKey) {
+        try {
+          final result = await invokeMethod(
+            'Ed25519.verify',
+            {
+              'data': asUint8List(message),
+              'signature': asUint8List(signature.bytes),
+              'publicKey': asUint8List(publicKey.bytes),
+            },
+          );
+          final error = result['error'];
+          if (error is String) {
+            throw StateError('error in "package:cryptography_flutter": $error');
+          }
+          return result['ok'] as bool;
+        } on UnsupportedError {
+          // Fall through to fallback
         }
-        return result['ok'] as bool;
       }
     }
     return await fallback.verify(

@@ -45,17 +45,21 @@ class FlutterPbkdf2 extends Pbkdf2 {
   }) async {
     final macName = _macNameFor(macAlgorithm);
     if (macName != null) {
-      final result = await invokeMethod(
-        'pbkdf2',
-        {
-          'mac': macName,
-          'bits': bits,
-          'iterations': iterations,
-          'password': password,
-          'nonce': asUint8List(nonce),
-        },
-      );
-      return SecretKeyData(result['hash'] as List<int>);
+      try {
+        final result = await invokeMethod(
+          'pbkdf2',
+          {
+            'mac': macName,
+            'bits': bits,
+            'iterations': iterations,
+            'password': password,
+            'nonce': asUint8List(nonce),
+          },
+        );
+        return SecretKeyData(result['hash'] as List<int>);
+      } on UnsupportedError {
+        // Fall through to fallback
+      }
     }
     final fallback = this.fallback;
     if (fallback == null) {

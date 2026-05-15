@@ -77,32 +77,36 @@ class FlutterEcdsa extends Ecdsa implements PlatformCryptographicAlgorithm {
   @override
   Future<EcKeyPair> newKeyPair() async {
     if (isSupportedPlatform) {
-      final result = await invokeMethod(
-        'Ecdsa.newKeyPair',
-        {
-          if (isAndroid) 'androidProvider': androidCryptoProvider,
-          'curve': keyPairType.name,
-        },
-      );
-      final der = result['der'] as Uint8List?;
-      if (der != null) {
-        // if (keyPairType==KeyPairType.p384) {
-        //   throw StateError('public key DER:\n${hexFromBytes(generatedPublicDer!)}');
-        // }
-        return EcKeyPairData.parseDer(
-          der,
+      try {
+        final result = await invokeMethod(
+          'Ecdsa.newKeyPair',
+          {
+            if (isAndroid) 'androidProvider': androidCryptoProvider,
+            'curve': keyPairType.name,
+          },
+        );
+        final der = result['der'] as Uint8List?;
+        if (der != null) {
+          // if (keyPairType==KeyPairType.p384) {
+          //   throw StateError('public key DER:\n${hexFromBytes(generatedPublicDer!)}');
+          // }
+          return EcKeyPairData.parseDer(
+            der,
+            type: keyPairType,
+          );
+        }
+        final d = result['d'] as Uint8List;
+        final x = result['x'] as Uint8List;
+        final y = result['y'] as Uint8List;
+        return EcKeyPairData(
+          d: d,
+          x: x,
+          y: y,
           type: keyPairType,
         );
+      } on UnsupportedError {
+        // Fall through to fallback
       }
-      final d = result['d'] as Uint8List;
-      final x = result['x'] as Uint8List;
-      final y = result['y'] as Uint8List;
-      return EcKeyPairData(
-        d: d,
-        x: x,
-        y: y,
-        type: keyPairType,
-      );
     }
     final fallback = this.fallback;
     if (fallback == null) {
@@ -114,30 +118,34 @@ class FlutterEcdsa extends Ecdsa implements PlatformCryptographicAlgorithm {
   @override
   Future<EcKeyPair> newKeyPairFromSeed(List<int> seed) async {
     if (isSupportedPlatform) {
-      final result = await invokeMethod(
-        'Ecdsa.newKeyPairFromSeed',
-        {
-          if (isAndroid) 'androidProvider': androidCryptoProvider,
-          'curve': _curveName,
-          'seed': asUint8List(seed),
-        },
-      );
-      final der = result['der'] as Uint8List?;
-      if (der != null) {
-        return EcKeyPairData.parseDer(
-          der,
+      try {
+        final result = await invokeMethod(
+          'Ecdsa.newKeyPairFromSeed',
+          {
+            if (isAndroid) 'androidProvider': androidCryptoProvider,
+            'curve': _curveName,
+            'seed': asUint8List(seed),
+          },
+        );
+        final der = result['der'] as Uint8List?;
+        if (der != null) {
+          return EcKeyPairData.parseDer(
+            der,
+            type: keyPairType,
+          );
+        }
+        final d = result['d'] as Uint8List;
+        final x = result['x'] as Uint8List;
+        final y = result['y'] as Uint8List;
+        return EcKeyPairData(
+          d: d,
+          x: x,
+          y: y,
           type: keyPairType,
         );
+      } on UnsupportedError {
+        // Fall through to fallback
       }
-      final d = result['d'] as Uint8List;
-      final x = result['x'] as Uint8List;
-      final y = result['y'] as Uint8List;
-      return EcKeyPairData(
-        d: d,
-        x: x,
-        y: y,
-        type: keyPairType,
-      );
     }
     final fallback = this.fallback;
     if (fallback == null) {
@@ -159,39 +167,43 @@ class FlutterEcdsa extends Ecdsa implements PlatformCryptographicAlgorithm {
           'keyPair',
         );
       }
-      Map result;
-      if (isCupertino) {
-        result = await invokeMethod(
-          'Ecdsa.sign',
-          {
-            if (isAndroid) 'androidProvider': androidCryptoProvider,
-            'curve': _curveName,
-            'data': Uint8List.fromList(message),
-            'der': keyPairData.toDer(),
-          },
-        );
-      } else {
-        result = await invokeMethod(
-          'Ecdsa.sign',
-          {
-            if (isAndroid) 'androidProvider': androidCryptoProvider,
-            'curve': _curveName,
-            'data': Uint8List.fromList(message),
-            'd': asUint8List(keyPairData.d),
-            'x': asUint8List(keyPairData.x),
-            'y': asUint8List(keyPairData.y),
-          },
-        );
+      try {
+        Map result;
+        if (isCupertino) {
+          result = await invokeMethod(
+            'Ecdsa.sign',
+            {
+              if (isAndroid) 'androidProvider': androidCryptoProvider,
+              'curve': _curveName,
+              'data': Uint8List.fromList(message),
+              'der': keyPairData.toDer(),
+            },
+          );
+        } else {
+          result = await invokeMethod(
+            'Ecdsa.sign',
+            {
+              if (isAndroid) 'androidProvider': androidCryptoProvider,
+              'curve': _curveName,
+              'data': Uint8List.fromList(message),
+              'd': asUint8List(keyPairData.d),
+              'x': asUint8List(keyPairData.x),
+              'y': asUint8List(keyPairData.y),
+            },
+          );
+        }
+        final error = result['error'] as String?;
+        if (error != null) {
+          throw StateError(
+            '"package:cryptography_flutter": $runtimeType.sign failed: $error',
+          );
+        }
+        final signature = result['signature'] as Uint8List;
+        final publicKey = await keyPairData.extractPublicKey();
+        return Signature(signature, publicKey: publicKey);
+      } on UnsupportedError {
+        // Fall through to fallback
       }
-      final error = result['error'] as String?;
-      if (error != null) {
-        throw StateError(
-          '"package:cryptography_flutter": $runtimeType.sign failed: $error',
-        );
-      }
-      final signature = result['signature'] as Uint8List;
-      final publicKey = await keyPairData.extractPublicKey();
-      return Signature(signature, publicKey: publicKey);
     }
     final fallback = this.fallback;
     if (fallback == null) {
@@ -213,9 +225,9 @@ class FlutterEcdsa extends Ecdsa implements PlatformCryptographicAlgorithm {
           'signature',
         );
       }
-      Map result;
-      if (isCupertino) {
-        try {
+      try {
+        Map result;
+        if (isCupertino) {
           result = await invokeMethod(
             'Ecdsa.verify',
             {
@@ -226,29 +238,29 @@ class FlutterEcdsa extends Ecdsa implements PlatformCryptographicAlgorithm {
               'der': publicKey.toDer(),
             },
           );
-        } on PlatformException {
-          rethrow;
+        } else {
+          result = await invokeMethod(
+            'Ecdsa.verify',
+            {
+              if (isAndroid) 'androidProvider': androidCryptoProvider,
+              'curve': _curveName,
+              'data': asUint8List(message),
+              'signature': asUint8List(signature.bytes),
+              'x': asUint8List(publicKey.x),
+              'y': asUint8List(publicKey.y),
+            },
+          );
         }
-      } else {
-        result = await invokeMethod(
-          'Ecdsa.verify',
-          {
-            if (isAndroid) 'androidProvider': androidCryptoProvider,
-            'curve': _curveName,
-            'data': asUint8List(message),
-            'signature': asUint8List(signature.bytes),
-            'x': asUint8List(publicKey.x),
-            'y': asUint8List(publicKey.y),
-          },
-        );
+        final error = result['error'];
+        if (error != null) {
+          throw StateError(
+            '"package:cryptography_flutter": $runtimeType.verify failed: $error',
+          );
+        }
+        return result['result'] as bool;
+      } on UnsupportedError {
+        // Fall through to fallback
       }
-      final error = result['error'];
-      if (error != null) {
-        throw StateError(
-          '"package:cryptography_flutter": $runtimeType.verify failed: $error',
-        );
-      }
-      return result['result'] as bool;
     }
     final fallback = this.fallback;
     if (fallback == null) {
